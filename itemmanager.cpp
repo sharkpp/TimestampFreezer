@@ -1,4 +1,5 @@
 #include "itemmanager.h"
+#include <QMessageBox>
 
 #if defined(Q_OS_MAC)
 # include <sys/time.h> // utimes
@@ -19,22 +20,22 @@ ItemManager::ItemManager(QObject *parent)
 
 // QAbstractItemModel interface
 
-QModelIndex ItemManager::index(int row, int column, const QModelIndex &parent /*= QModelIndex()*/) const
+QModelIndex ItemManager::index(int row, int column, const QModelIndex & /*parent*/ /*= QModelIndex()*/) const
 {
     return createIndex(row, column);
 }
 
-QModelIndex ItemManager::parent(const QModelIndex &child) const
+QModelIndex ItemManager::parent(const QModelIndex & /*child*/) const
 {
     return QModelIndex();
 }
 
-int ItemManager::rowCount(const QModelIndex &parent /*= QModelIndex()*/) const
+int ItemManager::rowCount(const QModelIndex & /*parent*/ /*= QModelIndex()*/) const
 {
     return m_itemList.count();
 }
 
-int ItemManager::columnCount(const QModelIndex &parent /*= QModelIndex()*/) const
+int ItemManager::columnCount(const QModelIndex & /*parent*/ /*= QModelIndex()*/) const
 {
     return ColumnNum;
 }
@@ -156,6 +157,11 @@ bool ItemManager::clear()
     return true;
 }
 
+bool ItemManager::empty() const
+{
+    return m_itemList.empty();
+}
+
 void ItemManager::updateTimestamp(ItemInfoType &info)
 {
     QFileInfo fileInfo(info.filePath);
@@ -175,30 +181,32 @@ bool ItemManager::resetTimestamp(const ItemInfoType &info)
     times[1].tv_sec = info.timestampOfModified.toTime_t();
     times[1].tv_usec= info.timestampOfModified.toMSecsSinceEpoch() % 100 * 1000;
     // 反映(アクセス日時は反映できないor反映してもすぐ変わる模様)
-    ::utimes(info.filePath.toLocal8Bit(), times);
+    return !::utimes(info.filePath.toLocal8Bit(), times);
 #elif defined(Q_OS_WIN32)
-    /*
+    QVector<wchar_t> fileNameW(info.filePath.size() + 1);
+    info.filePath.toWCharArray(&fileNameW[0]);
     HANDLE hFile = ::CreateFile(
-                        info.filePath.toLocal8Bit(),
-                        GENERIC_WRITE,
-                        FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
-                        NULL, OPEN_EXISTING, 0, NULL);
+                        &fileNameW[0],
+                        GENERIC_WRITE, 0,
+                        NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (INVALID_HANDLE_VALUE != hFile)
     {
-        //
+        BOOL r;
+        // time_t の基準日から FILETIME への変更
         LONGLONG offsetOfTimeT = 0;
-        LONGLONG nCreationTime = 0;
-        LONGLONG nLastAccessTime = 0;
-        LONGLONG nLastWriteTime = 0;
-        SYSTEMTIME stBase = { 1970, 1, 0, 1 };
-        SystemTimeToFileTime(stBase, (FILETIME*)&offsetOfTimeT);
-        nCreationTime   = offsetOfTimeT + info.timestampOfCreated.toMSecsSinceEpoch()  * 10000000;
-        nLastAccessTime = offsetOfTimeT + info.timestampOfModified.toMSecsSinceEpoch() * 10000000;
-        nLastWriteTime  = offsetOfTimeT + info.timestampOfRead.toMSecsSinceEpoch()     * 10000000;
-        ::SetFileTime(hFile, (FILETIME*)&nCreationTime, (FILETIME*)&nLastAccessTime, (FILETIME*)&timestampOfRead);
+        SYSTEMTIME stBase = { 1970, 1, 0, 1, 0, 0, 0, 0 };
+        ::SystemTimeToFileTime(&stBase, (FILETIME*)&offsetOfTimeT);
+        // タイムスタンプを FILETIME の基準日からに変更し適用
+        LONGLONG nCreationTime = 0, nLastAccessTime = 0, nLastWriteTime = 0;
+        nCreationTime   = offsetOfTimeT + info.timestampOfCreated.toMSecsSinceEpoch()  * 10000LL;
+        nLastAccessTime = offsetOfTimeT + info.timestampOfRead.toMSecsSinceEpoch()     * 10000LL;
+        nLastWriteTime  = offsetOfTimeT + info.timestampOfModified.toMSecsSinceEpoch() * 10000LL;
+        r = ::SetFileTime(hFile, (const FILETIME*)&nCreationTime, (const FILETIME*)&nLastAccessTime,
+                                 (const FILETIME*)&nLastWriteTime);
         ::CloseHandle(hFile);
+        return FALSE != r;
     }
-    */
+    return false;
 #else
 #error "not impliment1"
 #endif

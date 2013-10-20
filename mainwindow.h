@@ -18,6 +18,8 @@ public:
 
 private:
 
+    void closeEvent(QCloseEvent *event);
+
     void dragMoveEvent(QDragMoveEvent *event);
     void dragEnterEvent(QDragEnterEvent *event);
     void dropEvent(QDropEvent *event);

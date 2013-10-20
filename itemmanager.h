@@ -39,6 +39,8 @@ public:
 
     bool clear();
 
+    bool empty() const;
+
  //   bool updatew();
 
 protected:

@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include <QMessageBox>
+#include <QFileDialog>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -20,6 +22,26 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (!manager->empty())
+    {
+        int ret = QMessageBox::question(
+                    this, windowTitle(),
+                    tr("Are you sure you want to exit the application?\n"
+                       "Time stamp will be returned to the original all."),
+                    QMessageBox::Yes | QMessageBox::No,
+                    QMessageBox::Yes);
+        if (QMessageBox::No == ret)
+        {
+            event->ignore();
+            return;
+        }
+    }
+
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
@@ -54,7 +76,16 @@ void MainWindow::dropEvent(QDropEvent *event)
 
 void MainWindow::onAppendFile()
 {
-    manager->append("/Users/samepp/git/FuelPHP_docs_jp/favicon.ico");
+    QFileDialog dlg(this);
+    dlg.setFileMode(QFileDialog::ExistingFiles);
+    //dlg.setOption(QFileDialog::DontUseNativeDialog, false);
+    if (dlg.exec())
+    {
+        QStringList files = dlg.selectedFiles();
+        for(int i = 0; i < files.size(); i++) {
+            manager->append(files.at(i));
+        }
+    }
 }
 
 void MainWindow::onRemoveFile()
@@ -69,12 +100,11 @@ void MainWindow::onRemoveFile()
     if (selections.isEmpty()) {
         return;
     }
-int n=selections.count();
+
     for (int i = selections.count() - 1; 0 <= i; --i)
     {
         if (0 == selections.at(i).column())
         {
-            int row = selections.at(i).row();
             manager->remove(selections.at(i));
         }
     }
@@ -82,7 +112,15 @@ int n=selections.count();
 
 void MainWindow::onClearFileList()
 {
-    manager->clear();
+    int ret = QMessageBox::question(
+                this, windowTitle(),
+                tr("Are you sure you want to exclude from the list of all files?"),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No);
+    if (QMessageBox::Yes == ret)
+    {
+        manager->clear();
+    }
 }
 
 void MainWindow::onAbout()
